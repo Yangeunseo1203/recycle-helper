@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사진 한 장으로 끝내는 분리배출 도우미</title>
+  <!-- 구글 사전 학습 객체 인식 모델 (별도 model 폴더 불필요) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <style>
+    :root {
+      --primary: #0d9488;
+      --primary-dark: #0f766e;
+      --primary-light: #ccfbf1;
+      --green-accent: #16a34a;
+      --green-light: #dcfce7;
+      --bg-page: #f0fdf4;
+      --bg-card: #ffffff;
+      --text-main: #0f172a;
+      --text-sub: #475569;
+      --border-color: #cbd5e1;
+      --warn-bg: #fef3c7;
+      --warn-text: #92400e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.5;
+      font-size: 16px;
+    }
+    .app-container {
+      max-width: 480px;
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 20px 16px 36px;
+      display: flex;
+      flex-direction: column;
+    }
+    .hidden { display: none !important; }
+    .screen { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+    .badge {
+      display: inline-block;
+      background-color: var(--primary-light);
+      color: var(--primary-dark);
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    h1 { font-size: 1.7rem; font-weight: 800; line-height: 1.3; color: #064e3b; margin-bottom: 8px; }
+    .subtitle { font-size: 1rem; color: var(--text-sub); }
+    .privacy-card {
+      display: flex; align-items: center; gap: 12px;
+      background: #fff; border: 1.5px solid #99f6e4; border-radius: 14px; padding: 14px 16px;
+    }
+    .privacy-card p { font-size: 0.92rem; font-weight: 600; color: #115e59; }
+    .status-pill {
+      text-align: center; font-size: 0.92rem; color: var(--primary-dark);
+      background-color: #e6fffa; padding: 10px; border-radius: 10px; font-weight: 700;
+    }
+    .webcam-box { background: #0f172a; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .webcam-box video { width: 100%; max-height: 300px; border-radius: 10px; object-fit: cover; background: #000; }
+    .webcam-controls { display: flex; gap: 8px; }
+    .action-buttons { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
+    .btn {
+      width: 100%; min-height: 52px; padding: 13px 18px; font-size: 1.05rem; font-weight: 700;
+      border-radius: 14px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary { background-color: var(--primary); color: #fff; }
+    .btn-secondary { background-color: var(--green-accent); color: #fff; }
+    .btn-outline { background-color: #fff; color: var(--primary-dark); border: 2px solid var(--primary); }
+    .btn-sub-action { background-color: #f1f5f9; color: var(--text-main); border: 1.5px solid var(--border-color); font-size: 0.95rem; }
+    .card { background: #fff; border-radius: 16px; padding: 18px; border: 1px solid #e2e8f0; }
+    .preview-card {
+      position: relative; background: #0f172a; border-radius: 16px; overflow: hidden;
+      display: flex; justify-content: center; align-items: center; min-height: 200px; max-height: 280px;
+    }
+    .preview-card img { width: 100%; max-height: 280px; object-fit: contain; }
+    .analyzing-overlay {
+      position: absolute; inset: 0; background: rgba(15, 23, 42, 0.78); color: #fff;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-weight: 700;
+    }
+    .caption {
+      display: inline-block; font-size: 0.85rem; font-weight: 700; color: var(--primary-dark);
+      background-color: var(--primary-light); padding: 3px 10px; border-radius: 6px; margin-bottom: 6px;
+    }
+    .result-title { font-size: 1.55rem; font-weight: 800; }
+    .result-score { font-size: 1rem; font-weight: 700; color: var(--primary); margin-top: 4px; }
+    .guide-card { background-color: #fffbeb; border: 1.5px solid #fcd34d; }
+    .guide-message { font-size: 1rem; font-weight: 700; margin-bottom: 12px; }
+    .guide-actions { display: flex; flex-direction: column; gap: 8px; }
+    .checklist-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .checklist { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .checklist-item label {
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px;
+      background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; cursor: pointer; font-weight: 600;
+    }
+    .checklist-item input[type="checkbox"] { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--green-accent); }
+    .checklist-item.checked label { background-color: var(--green-light); border-color: #86efac; text-decoration: line-through; }
+    .complete-banner {
+      margin-top: 14px; padding: 14px; background-color: var(--green-accent); color: #fff;
+      border-radius: 12px; text-align: center; font-size: 1.15rem; font-weight: 800;
+    }
+    .source-note { margin-top: 12px; font-size: 0.8rem; color: var(--text-sub); text-align: right; }
+    .disclaimer { text-align: center; font-size: 0.88rem; color: var(--text-sub); background: #f1f5f9; padding: 12px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <main id="home-screen" class="screen">
+      <header>
+        <div class="badge">사전 학습 AI 탑재 · 별도 설치 없음</div>
+        <h1>사진 한 장으로 끝내는<br />분리배출 도우미</h1>
+        <p class="subtitle">쓰레기 사진을 찍거나 올리면 AI가 물체를 인식해 분리배출 방법을 알려드려요.</p>
+      </header>
+
+      <section class="privacy-card">
+        <span>🔒</span>
+        <p>사진은 기기 안에서만 분석되고 외부 서버로 전송되지 않아요.</p>
+      </section>
+
+      <div id="model-status" class="status-pill">구글 사전 학습 AI 모델을 불러오는 중...</div>
+
+      <section id="webcam-container" class="webcam-box hidden">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <div class="webcam-controls">
+          <button type="button" id="btn-capture-snap" class="btn btn-primary">📸 지금 촬영하기</button>
+          <button type="button" id="btn-close-webcam" class="btn btn-sub-action" style="width: 38%;">닫기</button>
+        </div>
+      </section>
+
+      <input type="file" id="camera-fallback-input" accept="image/*" capture="environment" class="hidden" />
+      <input type="file" id="gallery-input" accept="image/*" class="hidden" />
+
+      <section class="action-buttons">
+        <button type="button" id="btn-camera" class="btn btn-primary" disabled>📷 카메라로 찍기</button>
+        <button type="button" id="btn-gallery" class="btn btn-secondary" disabled>🖼️ 사진 올리기</button>
+      </section>
+    </main>
+
+    <main id="result-screen" class="screen hidden">
+      <section class="preview-card">
+        <img id="preview-image" src="" alt="미리보기" />
+        <div id="analyzing-overlay" class="analyzing-overlay hidden"><p>AI가 사진을 분석 중이에요...</p></div>
+      </section>
+
+      <section class="card">
+        <span class="caption">AI 인식 결과</span>
+        <h2 id="result-class-name" class="result-title">-</h2>
+        <p id="result-confidence" class="result-score">신뢰도 0%</p>
+      </section>
+
+      <section id="context-guide-section" class="card guide-card">
+        <p id="context-guide-message" class="guide-message">음식물이나 양념이 묻어 있는 용기인가요?</p>
+        <div class="guide-actions">
+          <button type="button" id="btn-dirty-yes" class="btn btn-sub-action">네, 음식물·양념이 묻어 있어요</button>
+          <button type="button" id="btn-dirty-no" class="btn btn-sub-action">아니요, 깨끗해요</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="checklist-header">
+          <h3>단계별 배출 체크리스트</h3>
+          <span id="checklist-progress" style="font-weight:700; color:var(--primary-dark);">0 / 0 완료</span>
+        </div>
+        <ul id="checklist-items" class="checklist"></ul>
+        <div id="checklist-complete-banner" class="complete-banner hidden">🎉 배출 준비 완료!</div>
+        <p class="source-note">기준 참고: 환경부·한국환경공단 「분리의 정석」</p>
+      </section>
+
+      <p class="disclaimer">AI 예측이며 틀릴 수 있어요. 헷갈리면 거주지 지자체 안내를 확인하세요.</p>
+      <button type="button" id="btn-home" class="btn btn-outline">처음으로</button>
+    </main>
+  </div>
+
+  <script>
+    const GUIDES = {
+      "플라스틱 용기 (깨끗함)": [
+        "비우기: 용기 안의 내용물을 깨끗이 비워 주세요.",
+        "헹구기: 이물질이 남지 않도록 물로 가볍게 헹궈 주세요.",
+        "라벨·상표 떼기: 겉면 비닐 라벨과 스티커를 제거해 주세요.",
+        "다른 재질 분리: 뚜껑, 빨대 등 다른 재질을 분리한 뒤 플라스틱류로 배출하세요."
+      ],
+      "오염된 플라스틱 용기": [
+        "음식물 비우기: 남은 음식물은 음식물 쓰레기로 비워 주세요.",
+        "세척하기: 물이나 세제로 기름기와 양념을 씻어낸 뒤 깨끗해지면 플라스틱류로 배출하세요.",
+        "지워지지 않으면 종량제봉투 배출: 세척해도 양념이 남으면 일반 종량제봉투에 버려 주세요."
+      ],
+      "캔·고철류": [
+        "비우기: 캔 내부의 음료나 내용물을 모두 비워 주세요.",
+        "헹구기: 겉과 속의 이물질을 물로 헹궈 주세요.",
+        "압착 및 배출: 가볍게 눌러 납작하게 만든 뒤 캔·고철류 수거함에 배출하세요."
+      ],
+      "유리병": [
+        "비우기 및 헹구기: 병 안의 내용물을 비우고 물로 헹궈 주세요.",
+        "뚜껑·라벨 분리: 금속/플라스틱 뚜껑과 제거 가능한 라벨을 떼어 주세요.",
+        "유리병류 배출: 깨지지 않게 주의하여 유리병류 수거함에 배출하세요."
+      ],
+      "종이류": [
+        "이물질 제거: 테이프, 택배 송장, 스프링, 비닐 코팅 부분을 제거해 주세요.",
+        "펼쳐서 접기: 부피를 줄여 물기에 젖지 않게 종이류 수거함에 배출하세요."
+      ],
+      "비닐류": [
+        "내용물 비우기: 비닐 안의 내용물을 비워 주세요.",
+        "깨끗하면 비닐류 / 오염되면 종량제봉투: 이물질이 없으면 비닐류로, 묻어서 닦이지 않으면 종량제봉투로 배출하세요."
+      ]
+    };
+
+    let model = null;
+    let stream = null;
+    let currentCategory = "플라스틱 용기 (깨끗함)";
+
+    const $ = (id) => document.getElementById(id);
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      try {
+        model = await cocoSsd.load();
+        $("model-status").textContent = "✅ 구글 AI 모델 준비 완료! 바로 찍거나 올려보세요.";
+        $("btn-camera").disabled = false;
+        $("btn-gallery").disabled = false;
+      } catch (e) {
+        $("model-status").textContent = "모델 로딩 실패. 인터넷 연결을 확인해 주세요.";
+      }
+
+      $("btn-camera").onclick = startCamera;
+      $("btn-capture-snap").onclick = snapPhoto;
+      $("btn-close-webcam").onclick = stopCamera;
+      $("btn-gallery").onclick = () => { stopCamera(); $("gallery-input").click(); };
+      $("camera-fallback-input").onchange = handleFile;
+      $("gallery-input").onchange = handleFile;
+      $("btn-home").onclick = () => {
+        stopCamera();
+        $("result-screen").classList.add("hidden");
+        $("home-screen").classList.remove("hidden");
+      };
+      $("btn-dirty-yes").onclick = () => {
+        $("result-class-name").textContent = "오염된 플라스틱 용기";
+        renderChecklist(GUIDES["오염된 플라스틱 용기"]);
+      };
+      $("btn-dirty-no").onclick = () => {
+        $("result-class-name").textContent = currentCategory;
+        renderChecklist(GUIDES[currentCategory]);
+      };
+    });
+
+    async function startCamera() {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+          $("webcam-video").srcObject = stream;
+          $("webcam-container").classList.remove("hidden");
+          return;
+        } catch (e) {}
+      }
+      $("camera-fallback-input").click();
+    }
+
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+      $("webcam-container").classList.add("hidden");
+    }
+
+    function snapPhoto() {
+      const v = $("webcam-video");
+      if (!v.videoWidth) return;
+      const c = document.createElement("canvas");
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext("2d").drawImage(v, 0, 0);
+      stopCamera();
+      analyzeDataUrl(c.toDataURL("image/jpeg", 0.9));
+    }
+
+    function handleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => analyzeDataUrl(ev.target.result);
+      reader.readAsDataURL(file);
+    }
+
+    function mapCocoToWaste(cocoClass) {
+      if (["bottle", "wine glass"].includes(cocoClass)) return "유리병";
+      if (["cup", "bowl", "fork", "knife", "spoon"].includes(cocoClass)) return "플라스틱 용기 (깨끗함)";
+      if (["book", "laptop", "cell phone"].includes(cocoClass)) return "종이류";
+      if (["handbag", "backpack", "suitcase"].includes(cocoClass)) return "비닐류";
+      return "플라스틱 용기 (깨끗함)";
+    }
+
+    function analyzeDataUrl(url) {
+      $("preview-image").onload = async () => {
+        $("home-screen").classList.add("hidden");
+        $("result-screen").classList.remove("hidden");
+        $("analyzing-overlay").classList.remove("hidden");
+
+        const preds = await model.detect($("preview-image"));
+        $("analyzing-overlay").classList.add("hidden");
+
+        if (preds.length > 0) {
+          preds.sort((a, b) => b.score - a.score);
+          const top = preds[0];
+          currentCategory = mapCocoToWaste(top.class);
+          $("result-class-name").textContent = currentCategory;
+          $("result-confidence").textContent = `인식 물체: ${top.class} (신뢰도 ${Math.round(top.score * 100)}%)`;
+        } else {
+          currentCategory = "플라스틱 용기 (깨끗함)";
+          $("result-class-name").textContent = "판정 보류 (용기류 추정)";
+          $("result-confidence").textContent = "물체가 명확히 잡히지 않았어요. 아래 체크리스트를 확인하세요.";
+        }
+        renderChecklist(GUIDES[currentCategory]);
+      };
+      $("preview-image").src = url;
+    }
+
+    function renderChecklist(steps) {
+      const ul = $("checklist-items");
+      ul.innerHTML = "";
+      $("checklist-complete-banner").classList.add("hidden");
+      const checked = new Array(steps.length).fill(false);
+
+      const update = () => {
+        const done = checked.filter(Boolean).length;
+        $("checklist-progress").textContent = `${done} / ${steps.length} 완료`;
+        $("checklist-complete-banner").classList.toggle("hidden", done !== steps.length);
+      };
+
+      steps.forEach((txt, i) => {
+        const li = document.createElement("li");
+        li.className = "checklist-item";
+        const label = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.onchange = () => { checked[i] = cb.checked; li.classList.toggle("checked", cb.checked); update(); };
+        label.append(cb, document.createTextNode(txt));
+        li.appendChild(label);
+        ul.appendChild(li);
+      });
+      update();
+    }
+  </script>
+</body>
+</html>
