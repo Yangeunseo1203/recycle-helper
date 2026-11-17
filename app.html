@@ -89,17 +89,42 @@
       background-color: var(--primary-light); padding: 3px 10px; border-radius: 6px; margin-bottom: 6px;
     }
     .result-title { font-size: 1.55rem; font-weight: 800; }
-    .result-score { font-size: 1rem; font-weight: 700; color: var(--primary); margin-top: 4px; }
-    .guide-card { background-color: #fffbeb; border: 1.5px solid #fcd34d; }
-    .guide-message { font-size: 1rem; font-weight: 700; margin-bottom: 12px; }
-    .guide-actions { display: flex; flex-direction: column; gap: 8px; }
+    .result-score { font-size: 0.95rem; font-weight: 600; color: var(--text-sub); margin-top: 4px; }
+
+    /* 품목 직접 선택 버튼 그리드 */
+    .manual-select-card { background-color: #f8fafc; border: 1.5px solid #cbd5e1; }
+    .manual-title { font-size: 0.95rem; font-weight: 800; color: var(--text-main); margin-bottom: 10px; }
+    .category-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .cat-btn {
+      min-height: 46px;
+      padding: 10px 12px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      border-radius: 12px;
+      border: 1.5px solid #cbd5e1;
+      background-color: #ffffff;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .cat-btn:hover { background-color: #f1f5f9; }
+    .cat-btn.active {
+      background-color: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary-dark);
+    }
+
     .checklist-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .checklist { list-style: none; display: flex; flex-direction: column; gap: 10px; }
     .checklist-item label {
       display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px;
       background-color: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; cursor: pointer; font-weight: 600;
     }
-    .checklist-item input[type="checkbox"] { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--green-accent); }
+    .checklist-item input[type="checkbox"] { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--green-accent); flex-shrink: 0; }
     .checklist-item.checked label { background-color: var(--green-light); border-color: #86efac; text-decoration: line-through; }
     .complete-banner {
       margin-top: 14px; padding: 14px; background-color: var(--green-accent); color: #fff;
@@ -113,9 +138,9 @@
   <div class="app-container">
     <main id="home-screen" class="screen">
       <header>
-        <div class="badge">사전 학습 AI 탑재 · 별도 설치 없음</div>
+        <div class="badge">AI 자동 분류 + 품목 직접 선택</div>
         <h1>사진 한 장으로 끝내는<br />분리배출 도우미</h1>
-        <p class="subtitle">쓰레기 사진을 찍거나 올리면 AI가 물체를 인식해 분리배출 방법을 알려드려요.</p>
+        <p class="subtitle">쓰레기 사진을 찍거나 올리면 AI가 1차 분류하고, 틀릴 경우 품목을 직접 눌러 정확한 배출법을 볼 수 있어요.</p>
       </header>
 
       <section class="privacy-card">
@@ -123,7 +148,7 @@
         <p>사진은 기기 안에서만 분석되고 외부 서버로 전송되지 않아요.</p>
       </section>
 
-      <div id="model-status" class="status-pill">구글 사전 학습 AI 모델을 불러오는 중...</div>
+      <div id="model-status" class="status-pill">AI 모델을 불러오는 중...</div>
 
       <section id="webcam-container" class="webcam-box hidden">
         <video id="webcam-video" autoplay playsinline muted></video>
@@ -149,16 +174,21 @@
       </section>
 
       <section class="card">
-        <span class="caption">AI 인식 결과</span>
+        <span id="result-badge" class="caption">AI 예측 결과</span>
         <h2 id="result-class-name" class="result-title">-</h2>
         <p id="result-confidence" class="result-score">신뢰도 0%</p>
       </section>
 
-      <section id="context-guide-section" class="card guide-card">
-        <p id="context-guide-message" class="guide-message">음식물이나 양념이 묻어 있는 용기인가요?</p>
-        <div class="guide-actions">
-          <button type="button" id="btn-dirty-yes" class="btn btn-sub-action">네, 음식물·양념이 묻어 있어요</button>
-          <button type="button" id="btn-dirty-no" class="btn btn-sub-action">아니요, 깨끗해요</button>
+      <!-- AI 예측이 틀렸을 때 바로 수정할 수 있는 품목 직접 선택 버튼 -->
+      <section class="card manual-select-card">
+        <p class="manual-title">👆 AI 예측이 다르다면 실제 품목을 눌러 주세요</p>
+        <div class="category-grid" id="category-buttons">
+          <button type="button" class="cat-btn" data-cat="깨끗한 플라스틱 용기">♻️ 깨끗한 플라스틱</button>
+          <button type="button" class="cat-btn" data-cat="오염된 플라스틱 용기">🍜 오염된 플라스틱</button>
+          <button type="button" class="cat-btn" data-cat="캔·고철류">🥫 캔 · 고철류</button>
+          <button type="button" class="cat-btn" data-cat="유리병">🍾 유리병</button>
+          <button type="button" class="cat-btn" data-cat="종이류">📦 종이류</button>
+          <button type="button" class="cat-btn" data-cat="비닐류">🛍️ 비닐류</button>
         </div>
       </section>
 
@@ -179,47 +209,46 @@
 
   <script>
     const GUIDES = {
-      "플라스틱 용기 (깨끗함)": [
+      "깨끗한 플라스틱 용기": [
         "비우기: 용기 안의 내용물을 깨끗이 비워 주세요.",
         "헹구기: 이물질이 남지 않도록 물로 가볍게 헹궈 주세요.",
         "라벨·상표 떼기: 겉면 비닐 라벨과 스티커를 제거해 주세요.",
-        "다른 재질 분리: 뚜껑, 빨대 등 다른 재질을 분리한 뒤 플라스틱류로 배출하세요."
+        "다른 재질 분리: 뚜껑, 빨대 등 다른 재질을 분리한 뒤 플라스틱류(투명 생수·음료 페트병은 전용 수거함)로 배출하세요."
       ],
       "오염된 플라스틱 용기": [
-        "음식물 비우기: 남은 음식물은 음식물 쓰레기로 비워 주세요.",
-        "세척하기: 물이나 세제로 기름기와 양념을 씻어낸 뒤 깨끗해지면 플라스틱류로 배출하세요.",
-        "지워지지 않으면 종량제봉투 배출: 세척해도 양념이 남으면 일반 종량제봉투에 버려 주세요."
+        "음식물 비우기: 남은 음식물 찌꺼기는 음식물 쓰레기(또는 일반쓰레기)로 먼저 비워 주세요.",
+        "세척하기: 물이나 세제로 용기에 묻은 기름기와 양념을 씻어내 주세요.",
+        "지워지지 않으면 종량제봉투 배출: 세척해도 붉은 양념이나 기름이 남으면 재활용이 안 되므로 일반 종량제봉투에 버려 주세요."
       ],
       "캔·고철류": [
         "비우기: 캔 내부의 음료나 내용물을 모두 비워 주세요.",
-        "헹구기: 겉과 속의 이물질을 물로 헹궈 주세요.",
-        "압착 및 배출: 가볍게 눌러 납작하게 만든 뒤 캔·고철류 수거함에 배출하세요."
+        "헹구기: 겉과 속의 이물질을 물로 깨끗이 헹궈 주세요.",
+        "압착 및 배출: 부피를 줄이기 위해 가볍게 눌러 납작하게 만든 뒤 캔·고철류 수거함에 배출하세요."
       ],
       "유리병": [
-        "비우기 및 헹구기: 병 안의 내용물을 비우고 물로 헹궈 주세요.",
-        "뚜껑·라벨 분리: 금속/플라스틱 뚜껑과 제거 가능한 라벨을 떼어 주세요.",
-        "유리병류 배출: 깨지지 않게 주의하여 유리병류 수거함에 배출하세요."
+        "비우기 및 헹구기: 병 안의 내용물을 비우고 물로 안쪽을 헹궈 주세요.",
+        "뚜껑·라벨 분리: 금속이나 플라스틱 뚜껑을 분리하고 제거 가능한 상표를 떼어 주세요.",
+        "유리병류 배출: 깨지지 않도록 주의하여 유리병류 수거함에 배출하세요. (깨진 유리·도자기는 종량제봉투/불연성 마대)"
       ],
       "종이류": [
-        "이물질 제거: 테이프, 택배 송장, 스프링, 비닐 코팅 부분을 제거해 주세요.",
-        "펼쳐서 접기: 부피를 줄여 물기에 젖지 않게 종이류 수거함에 배출하세요."
+        "이물질 제거: 테이프, 택배 송장(스티커), 스프링, 비닐 코팅 표지 등 종이가 아닌 부분을 떼어 내세요.",
+        "펼쳐서 접기: 상자나 종이류는 납작하게 펼쳐서 접어 주세요.",
+        "종이류 배출: 물기에 젖지 않게 묶거나 정리해 종이류 수거함에 배출하세요. (영수증, 기름 묻은 종이는 종량제봉투)"
       ],
       "비닐류": [
-        "내용물 비우기: 비닐 안의 내용물을 비워 주세요.",
-        "깨끗하면 비닐류 / 오염되면 종량제봉투: 이물질이 없으면 비닐류로, 묻어서 닦이지 않으면 종량제봉투로 배출하세요."
+        "내용물 비우기: 비닐 안의 내용물을 비우고 이물질이 묻어 있는지 확인하세요.",
+        "깨끗하면 비닐류 / 오염되면 종량제봉투: 이물질이 없는 깨끗한 비닐은 흩날리지 않게 모아 비닐류로, 닦이지 않는 오염 비닐은 종량제봉투로 배출하세요."
       ]
     };
 
     let model = null;
     let stream = null;
-    let currentCategory = "플라스틱 용기 (깨끗함)";
-
     const $ = (id) => document.getElementById(id);
 
     window.addEventListener("DOMContentLoaded", async () => {
       try {
         model = await cocoSsd.load();
-        $("model-status").textContent = "✅ 구글 AI 모델 준비 완료! 바로 찍거나 올려보세요.";
+        $("model-status").textContent = "✅ AI 모델 준비 완료! 바로 찍거나 올려보세요.";
         $("btn-camera").disabled = false;
         $("btn-gallery").disabled = false;
       } catch (e) {
@@ -237,15 +266,27 @@
         $("result-screen").classList.add("hidden");
         $("home-screen").classList.remove("hidden");
       };
-      $("btn-dirty-yes").onclick = () => {
-        $("result-class-name").textContent = "오염된 플라스틱 용기";
-        renderChecklist(GUIDES["오염된 플라스틱 용기"]);
-      };
-      $("btn-dirty-no").onclick = () => {
-        $("result-class-name").textContent = currentCategory;
-        renderChecklist(GUIDES[currentCategory]);
-      };
+
+      // 품목 직접 선택 버튼 이벤트 연결
+      document.querySelectorAll(".cat-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const selectedCat = btn.getAttribute("data-cat");
+          selectCategory(selectedCat, "사용자 직접 선택", "선택한 품목의 「분리의 정석」 배출 기준입니다.");
+        });
+      });
     });
+
+    function selectCategory(categoryName, badgeText, subText) {
+      $("result-badge").textContent = badgeText;
+      $("result-class-name").textContent = categoryName;
+      $("result-confidence").textContent = subText;
+
+      document.querySelectorAll(".cat-btn").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-cat") === categoryName);
+      });
+
+      renderChecklist(GUIDES[categoryName] || GUIDES["깨끗한 플라스틱 용기"]);
+    }
 
     async function startCamera() {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -285,10 +326,10 @@
 
     function mapCocoToWaste(cocoClass) {
       if (["bottle", "wine glass"].includes(cocoClass)) return "유리병";
-      if (["cup", "bowl", "fork", "knife", "spoon"].includes(cocoClass)) return "플라스틱 용기 (깨끗함)";
+      if (["cup", "bowl", "fork", "knife", "spoon"].includes(cocoClass)) return "깨끗한 플라스틱 용기";
       if (["book", "laptop", "cell phone"].includes(cocoClass)) return "종이류";
       if (["handbag", "backpack", "suitcase"].includes(cocoClass)) return "비닐류";
-      return "플라스틱 용기 (깨끗함)";
+      return "깨끗한 플라스틱 용기";
     }
 
     function analyzeDataUrl(url) {
@@ -303,15 +344,19 @@
         if (preds.length > 0) {
           preds.sort((a, b) => b.score - a.score);
           const top = preds[0];
-          currentCategory = mapCocoToWaste(top.class);
-          $("result-class-name").textContent = currentCategory;
-          $("result-confidence").textContent = `인식 물체: ${top.class} (신뢰도 ${Math.round(top.score * 100)}%)`;
+          const mapped = mapCocoToWaste(top.class);
+          selectCategory(
+            mapped,
+            "AI 1차 예측 결과",
+            `인식 물체: ${top.class} (신뢰도 ${Math.round(top.score * 100)}%) · 다르면 아래에서 변경하세요`
+          );
         } else {
-          currentCategory = "플라스틱 용기 (깨끗함)";
-          $("result-class-name").textContent = "판정 보류 (용기류 추정)";
-          $("result-confidence").textContent = "물체가 명확히 잡히지 않았어요. 아래 체크리스트를 확인하세요.";
+          selectCategory(
+            "깨끗한 플라스틱 용기",
+            "판정 보류",
+            "물체가 명확히 잡히지 않았어요. 아래에서 실제 품목을 눌러 주세요."
+          );
         }
-        renderChecklist(GUIDES[currentCategory]);
       };
       $("preview-image").src = url;
     }
